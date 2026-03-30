@@ -19,12 +19,12 @@ fn main() {
             thread::sleep(Duration::from_millis(1000));
         }; 
 
-        let mut jobs = lock.lock().unwrap();
-        jobs.jobs.push_back(Box::new(job));
-        println!("-- Added the {} job to the queue --", i);
-        cvar.notify_one();
-        drop(jobs);
-        // give time for the workers to swoop in
+        // let mut jobs = lock.lock().unwrap();
+        // jobs.jobs.push_back(Box::new(job));
+        // cvar.notify_one();
+        // drop(jobs);
+        // // give time for the workers to swoop in
+        pool.execute(job);
         thread::sleep(Duration::from_millis(100));
     }
 
@@ -36,7 +36,8 @@ fn main() {
             cvar.notify_all();
             break;
         }
-        println!("deadl locked???");
+        thread::sleep(Duration::from_millis(3000));
+        println!("dead locked???");
     }
     for handle in pool.threads {
         handle.join().unwrap();

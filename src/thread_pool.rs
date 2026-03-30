@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
 use std::thread;
 use std::sync::{Arc, Mutex, Condvar};
 
@@ -9,7 +10,8 @@ pub struct SharedData {
 
 pub struct Pool {
     pub threads: Vec<thread::JoinHandle<()>>,
-    pub data: Arc<(Mutex<SharedData>, Condvar)>
+    pub data: Arc<(Mutex<SharedData>, Condvar)>,
+    pub job_done_count: Arc<AtomicUsize>
 }
 
 impl Pool {
@@ -51,7 +53,19 @@ impl Pool {
             });
             handles.push(handle);
         }
-        Pool{threads: handles, data}
+        Pool{threads: handles, data, job_done_count: Arc::new(AtomicUsize::new(0))}
 
     }
+
+    pub fn execute<F>(&self, f: F)
+        where 
+            F: FnOnce(usize) + Send + 'static
+            {
+                let (lock, cvar) = & *self.data;
+                let mut data = lock.lock().unwrap();
+
+                data.jobs.push_back(Box::new(f));
+                println!("-- Added a new job to the queue --");
+                cvar.notify_one();
+            }
 }
