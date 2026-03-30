@@ -68,4 +68,24 @@ impl Pool {
                 println!("-- Added a new job to the queue --");
                 cvar.notify_one();
             }
+
+    
+}
+
+impl Drop for Pool {
+    fn drop(&mut self) {
+        println!("Pool is being dropped. Initiating shutdown...");
+        {
+            let (lock, cvar) = &*self.data;
+            let mut data = lock.lock().unwrap();
+            data.is_dead = true;
+            cvar.notify_all();
+        }
+
+        // We use .drain(..) to take ownership of the handles out of the Vec
+        for handle in self.threads.drain(..) {
+            handle.join().unwrap();
+        }
+        println!("All threads successfully joined.");
+    }
 }
