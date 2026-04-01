@@ -10,6 +10,6 @@ fn main() {
     }).join();
 
     INIT.call_once(|| {
-        println!("this should only print once!");
+        println!("this should only print once!-- agian -- this should not print");
     });
 }
