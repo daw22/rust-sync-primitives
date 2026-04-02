@@ -1,7 +1,9 @@
+use std::clone;
 use std::env;
 use std::thread;
 use std::time::Duration;
 
+mod arc;
 mod thread_pool;
 
 fn main() {
@@ -20,5 +22,17 @@ fn main() {
         pool.execute(job);
         // give time for the workers to swoop in
         thread::sleep(Duration::from_millis(100));
+    }
+
+    // construct MyArc
+    let my_arc = arc::MyArc::new(String::from("dawit"));
+    let clone1 = my_arc.clone(); 
+    
+    thread::spawn(move || {
+        println!("{}", *clone1);
+    }).join().unwrap();
+
+    {
+        let _clone2 = my_arc.clone();
     }
 }
