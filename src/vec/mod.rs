@@ -4,7 +4,7 @@
 // the pointer to the allocation, the size of the allocation, number of initialized elements
 
 use std::ops::{Deref, DerefMut};
-use std::ptr::NonNull;
+use std::ptr::{ self, NonNull, copy};
 use std::alloc::{Layout, alloc, dealloc, realloc};
 
 #[derive(Debug)]
@@ -75,6 +75,34 @@ impl<T> MyVec<T> {
             }
         }
     }
+
+    pub fn insert(&mut self, index: usize, elem: T) {
+        assert!(index <= self.len, "index out of bound!!");
+        if self.len == self.cap { self.grow()}
+        unsafe {
+           copy(
+               self.ptr.as_ptr().add(index), 
+               self.ptr.as_ptr().add(index + 1), 
+               self.len - index
+            ); 
+           ptr::write(self.ptr.as_ptr().add(index), elem);
+        }
+        self.len += 1;
+    }
+
+    pub fn remove(&mut self, index: usize) -> T{
+        assert!(index <= self.len, "Index out of bound!!");
+        unsafe {
+            self.len -= 1;
+            let removed_elem = ptr::read(self.ptr.as_ptr().add(index));
+            copy(
+                self.ptr.as_ptr().add(index + 1), 
+                self.ptr.as_ptr().add(index), 
+                self.len - index
+            );
+            removed_elem
+        }
+    } 
 }
 
 impl<T> Drop for MyVec<T> {
