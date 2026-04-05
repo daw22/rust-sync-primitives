@@ -134,3 +134,80 @@ impl<T> DerefMut for MyVec<T> {
         } 
     }
 }
+
+// IntoIter impl
+pub struct IntoIter<T> {
+    buf: NonNull<T>,
+    cap: usize,
+    start: *const T,
+    end: *const T,
+}
+
+impl<T> IntoIterator for MyVec<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        // don't drop MyVec yet, it would free the buf 
+        let vec = std::mem::ManuallyDrop::new(self);
+        
+        // construct IntoIter
+        let ptr = vec.ptr;
+        let cap = vec.cap;
+        let len = vec.len;
+
+        IntoIter {
+            buf: ptr,
+            cap,
+            start: ptr.as_ptr(),
+            end: if cap == 0 {
+                ptr.as_ptr()
+            }else {
+                unsafe { ptr.as_ptr().add(len)}
+            }
+        }
+    }
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        }else {
+            unsafe {
+                let val = ptr::read(self.start);
+                self.start = self.start.offset(1);
+                Some(val)
+            }
+        }
+    }
+}
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    fn next_back(&mut self) -> Option<T> {
+       if self.end == self.start {
+           None
+       }else {
+           unsafe {
+               self.end = self.end.offset(-1);
+               Some(ptr::read(self.end))
+           }
+       }
+    }
+}
+
+impl<T> Drop for IntoIter<T> {
+    fn drop(&mut self) {
+        // drain the buffer any remaining item
+        // deallocate it
+        if self.cap != 0 {
+            for _ in &mut *self {}
+
+            let layout = Layout::array::<T>(self.cap).unwrap();
+            unsafe {
+                dealloc(self.buf.as_ptr() as *mut u8, layout);
+            }
+        }
+    }
+}
