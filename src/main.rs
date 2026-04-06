@@ -4,8 +4,12 @@ use std::thread;
 use std::time::Duration;
 use std::alloc::{System, GlobalAlloc};
 
+use crate::vec::MyVec;
+
 mod arc;
 mod thread_pool;
+mod vec;
+
 // custom allocator
 struct CountingAllocator {
     allocated_bytes: AtomicUsize,
@@ -67,10 +71,49 @@ fn main() {
     //     let _clone2 = my_arc.clone();
     // }
     // test the custom allocator
-    println!("Before creating the vector: {}", GLOBAL.allocated_bytes.load(Ordering::SeqCst));
-    {
-        let _ = vec![1, 2, 3, 4];
-        println!("After creating a vector: {}", GLOBAL.allocated_bytes.load(Ordering::SeqCst));
+    // println!("Before creating the vector: {}", GLOBAL.allocated_bytes.load(Ordering::SeqCst));
+    // {
+    //     let _ = vec![1, 2, 3, 4];
+    //     println!("After creating a vector: {}", GLOBAL.allocated_bytes.load(Ordering::SeqCst));
+    // }
+    // println!("After the vector is droped, deallocated size: {}", GLOBAL.deallocated_bytes.load(Ordering::SeqCst));
+    
+
+    // try initialize my custom vec
+    // let mut vec: vec::MyVec<u32> = vec::MyVec::new();
+    // vec.push(1);
+    // vec.push(2);
+    // vec.push(3);
+    // println!("{:?}", vec);
+    // let _ = vec.pop();
+    // println!("{:?}", vec);
+    // // try initalizing it with ZST
+    // // let _vec1: vec::MyVec<()> = vec::MyVec::new();
+    // vec.insert(1, 12);
+    // println!("{:?}", vec);
+    // for i in vec.iter() {
+    //     println!("{}", i);
+    // }
+    // vec.remove(1);
+    // for i in vec.iter() {
+    //     println!("{}", i);
+    // }
+
+    let mut vec: MyVec<String> = MyVec::new();
+    
+
+    vec.push(String::from("DAwit"));
+    vec.push(String::from("DAwit"));
+    vec.push(String::from("DAwit"));
+
+    vec.drain();
+    for (i, val) in vec.into_iter().enumerate() {
+        println!("{}", val); 
+        if i == 0 { 
+            break;
+        }
     }
-    println!("After the vector is droped, deallocated size: {}", GLOBAL.deallocated_bytes.load(Ordering::SeqCst));
+    
 }
+
+

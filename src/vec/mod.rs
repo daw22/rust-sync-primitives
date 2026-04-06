@@ -3,6 +3,7 @@
 // layout
 // the pointer to the allocation, the size of the allocation, number of initialized elements
 
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::ptr::{ self, NonNull, copy};
 use std::alloc::{Layout, alloc, dealloc, realloc};
@@ -134,7 +135,6 @@ impl<T> Drop for MyVec<T> {
     fn drop(&mut self) {
         if self.cap() != 0 {
             // drop every element
-            while let Some(_) = self.pop() {}
             let layout = Layout::array::<T>(self.len).unwrap();
             unsafe {
                 dealloc(self.ptr() as *mut u8, layout);
@@ -160,11 +160,58 @@ impl<T> DerefMut for MyVec<T> {
     }
 }
 
+// refactor - a common raw itertator for IntoIter and Drain
+struct RawValIter<T> {
+    start: *const T,
+    end: *const T
+}
+
+impl<T> RawValIter<T> {
+    unsafe fn new(slice: &[T]) -> Self {
+        RawValIter { 
+            start: slice.as_ptr(),
+            end: if slice.len() == 0 {
+                slice.as_ptr()
+            }else {
+                unsafe { slice.as_ptr().add(slice.len()) }
+            } 
+        }
+    }
+}
+
+impl<T> Iterator for RawValIter<T> {
+    type Item = T;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+       if self.start == self.end {
+           None
+       }else {
+           unsafe {
+               let val = ptr::read(self.start);
+               self.start = self.start.offset(1);
+               Some(val)
+           }
+       } 
+    }
+}
+
+impl<T> DoubleEndedIterator for RawValIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        }else {
+            unsafe {
+                self.end = self.end.offset(-1);
+                let val = ptr::read(self.end);
+                Some(val)
+            }
+        }
+    }
+}
 // IntoIter impl
 pub struct IntoIter<T> {
     _buf: RawVec<T>,
-    start: *const T,
-    end: *const T,
+    raw_iter: RawValIter<T>
 }
 
 impl<T> IntoIterator for MyVec<T> {
@@ -173,18 +220,13 @@ impl<T> IntoIterator for MyVec<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         
+        let iter = unsafe { RawValIter::new(&self)};
         // construct IntoIter
         let ptr = unsafe {ptr::read(&self.buf)};
-        let len = self.len;
         std::mem::forget(self);
 
         IntoIter {
-            start: ptr.ptr.as_ptr(),
-            end: if ptr.cap == 0 {
-                ptr.ptr.as_ptr()
-            }else {
-                unsafe { ptr.ptr.as_ptr().add(len)}
-            },
+            raw_iter: iter,
             _buf: ptr,
         }
     }
@@ -193,28 +235,13 @@ impl<T> IntoIterator for MyVec<T> {
 impl<T> Iterator for IntoIter<T> {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start == self.end {
-            None
-        }else {
-            unsafe {
-                let val = ptr::read(self.start);
-                self.start = self.start.offset(1);
-                Some(val)
-            }
-        }
+        self.raw_iter.next()
     }
 }
 
 impl<T> DoubleEndedIterator for IntoIter<T> {
     fn next_back(&mut self) -> Option<T> {
-       if self.end == self.start {
-           None
-       }else {
-           unsafe {
-               self.end = self.end.offset(-1);
-               Some(ptr::read(self.end))
-           }
-       }
+        self.raw_iter.next_back()
     }
 }
 
@@ -223,6 +250,46 @@ impl<T> Drop for IntoIter<T> {
         // drain the buffer any remaining item
         if self._buf.cap != 0 {
             for _ in &mut *self {}
+        }
+    }
+}
+
+
+pub struct Drain<'a, T: 'a> {
+    _phantom: PhantomData<&'a mut MyVec<T>>,
+    raw_iter: RawValIter<T>
+}
+
+impl<'a, T> Iterator for Drain<'a, T> {
+    type Item = T;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        self.raw_iter.next()
+    } 
+}
+
+impl<'a, T> DoubleEndedIterator for Drain<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.raw_iter.next_back()
+    }
+}
+
+impl<'a, T> Drop for Drain<'a, T> {
+    fn drop(&mut self) {
+        for _ in &mut *self {}
+    }
+}
+
+// applay drain to MyVec
+impl<T> MyVec<T> {
+    pub fn drain(&mut self) -> Drain<'_, T> {
+        let raw_iter = unsafe { RawValIter::new(&self)};
+
+        self.len = 0;
+
+        Drain {
+            raw_iter,
+            _phantom: PhantomData
         }
     }
 }
