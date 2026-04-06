@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::ptr::{ self, NonNull, copy};
 use std::alloc::{Layout, alloc, dealloc, realloc};
+use std::mem;
 
 #[derive(Debug)]
 struct RawVec<T> {
@@ -23,6 +24,8 @@ impl<T> RawVec<T> {
     }
 
     fn grow(&mut self) {
+        // if we call grow for ZST -> Bad
+        assert!(mem::size_of::<T>() != 0, "allocation overflow");
         let new_cap = if self.cap == 0 { 1 }else {self.cap * 2};
         let new_layout = Layout::array::<T>(new_cap).unwrap();
         assert!(new_layout.size() < isize::MAX as usize, "Allocation too Large!!");
@@ -46,7 +49,9 @@ impl<T> RawVec<T> {
 
 impl<T> Drop for RawVec<T> {
     fn drop(&mut self) {
-       if self.cap != 0 {
+        println!("Drop for RawVec called!. deallocating memory");
+       let elem_size = mem::size_of::<T>();
+       if self.cap != 0 && elem_size != 0{
            let layout = Layout::array::<T>(self.cap).unwrap();
            unsafe { dealloc(self.ptr.as_ptr() as *mut u8, layout);}
        } 
@@ -67,7 +72,7 @@ unsafe impl<T: Sync> Sync for MyVec<T> {}
 
 impl<T> MyVec<T> {
     pub fn new() -> Self {
-        assert!(std::mem::size_of::<T>() != 0, "not handling ZSTs");
+        // assert!(std::mem::size_of::<T>() != 0, "not handling ZSTs");
         MyVec {
             buf: RawVec::new(),
             len: 0,
@@ -82,7 +87,7 @@ impl<T> MyVec<T> {
     }
 
     pub fn push(&mut self, elem: T) {
-        if self.cap() == self.len { self.buf.grow();}
+        if self.cap() == self.len && mem::size_of::<T>() != 0 { self.buf.grow();}
 
         // do a blind write
         unsafe { std::ptr::write(self.ptr().add(self.len), elem);}
@@ -104,7 +109,7 @@ impl<T> MyVec<T> {
 
     pub fn insert(&mut self, index: usize, elem: T) {
         assert!(index <= self.len, "index out of bound!!");
-        if self.len == self.cap() { self.buf.grow()}
+        if self.len == self.cap()  && mem::size_of::<T>() != 0 { self.buf.grow()}
         unsafe {
            copy(
                self.ptr().add(index), 
@@ -170,7 +175,9 @@ impl<T> RawValIter<T> {
     unsafe fn new(slice: &[T]) -> Self {
         RawValIter { 
             start: slice.as_ptr(),
-            end: if slice.len() == 0 {
+            end: if mem::size_of::<T>() == 0 {
+                (slice.as_ptr() as usize + slice.len()) as *const _
+            }else if slice.len() == 0 {
                 slice.as_ptr()
             }else {
                 unsafe { slice.as_ptr().add(slice.len()) }
@@ -188,7 +195,11 @@ impl<T> Iterator for RawValIter<T> {
        }else {
            unsafe {
                let val = ptr::read(self.start);
-               self.start = self.start.offset(1);
+               self.start = if mem::size_of::<T>() == 0 {
+                    (self.start as usize + 1) as *const _
+               }else{
+                   self.start.offset(1)
+               };
                Some(val)
            }
        } 
@@ -280,7 +291,7 @@ impl<'a, T> Drop for Drain<'a, T> {
     }
 }
 
-// applay drain to MyVec
+// apply drain to MyVec
 impl<T> MyVec<T> {
     pub fn drain(&mut self) -> Drain<'_, T> {
         let raw_iter = unsafe { RawValIter::new(&self)};
@@ -293,3 +304,4 @@ impl<T> MyVec<T> {
         }
     }
 }
+

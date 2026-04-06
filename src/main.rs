@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt::Display;
 use std::sync::atomic::{ Ordering, AtomicUsize};
 use std::thread;
 use std::time::Duration;
@@ -99,21 +100,40 @@ fn main() {
     //     println!("{}", i);
     // }
 
-    let mut vec: MyVec<String> = MyVec::new();
+    // let mut vec: MyVec<String> = MyVec::new();
     
 
-    vec.push(String::from("DAwit"));
-    vec.push(String::from("DAwit"));
-    vec.push(String::from("DAwit"));
+    // vec.push(String::from("DAwit"));
+    // vec.push(String::from("DAwit"));
+    // vec.push(String::from("DAwit"));
 
-    vec.drain();
-    for (i, val) in vec.into_iter().enumerate() {
-        println!("{}", val); 
-        if i == 0 { 
-            break;
+    // test ZST
+    #[derive(Copy, Clone)]
+    struct Zst {}
+    impl Display for Zst {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Hi, i am a ZST")
         }
     }
-    
+    let mut vec: MyVec<Zst>  = MyVec::new();
+    let x: Zst = Zst {  };
+    vec.push(x);
+    vec.push(x);
+    vec.push(x);
+    vec.push(x);
+    vec.push(x);
+    // vec.drain();
+
+    for i in vec {
+        println!("{}", i);
+    }
+    // for (_, val) in vec.into_iter().enumerate() {
+    //     println!("{}", val); 
+    //     // if i == 0 { 
+    //     //     break;
+    //     // }
+    // }
+
 }
 
 
