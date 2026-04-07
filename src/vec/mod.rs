@@ -140,10 +140,11 @@ impl<T> Drop for MyVec<T> {
     fn drop(&mut self) {
         if self.cap() != 0 {
             // drop every element
-            let layout = Layout::array::<T>(self.len).unwrap();
-            unsafe {
-                dealloc(self.ptr() as *mut u8, layout);
-            }
+            // let layout = Layout::array::<T>(self.len).unwrap();
+            // unsafe {
+            //     dealloc(self.ptr() as *mut u8, layout);
+            // }
+            while let Some(_) = self.pop() {};
         }
     }
 } 
